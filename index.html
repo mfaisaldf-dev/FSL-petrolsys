@@ -173,16 +173,16 @@
                 <label for="product">Select Product <span class="required">*</span></label>
                 <select id="product" name="product" required>
                     <option value="">Choose a product...</option>
-                    <option value="Product A">Product A</option>
-                    <option value="Product B">Product B</option>
-                    <option value="Product C">Product C</option>
-                    <option value="Product D">Product D</option>
+                    <!-- Products will be loaded dynamically -->
                 </select>
             </div>
             
             <div class="form-group">
-                <label for="datetime">Date & Time (Optional)</label>
-                <input type="datetime-local" id="datetime" name="datetime">
+                <label for="timeslot">Select Time Slot (Optional)</label>
+                <select id="timeslot" name="timeslot">
+                    <option value="">Choose a time slot...</option>
+                    <!-- Time slots will be loaded dynamically -->
+                </select>
             </div>
             
             <div class="form-group">
@@ -223,6 +223,69 @@
         const receiptInput = document.getElementById('receipt');
         const fileNameDiv = document.getElementById('fileName');
         const previewImg = document.getElementById('preview');
+        
+        // Load products and time slots on page load
+        loadProducts();
+        loadTimeSlots();
+        
+        // Load available products
+        async function loadProducts() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('products')
+                    .select('*')
+                    .order('name');
+                
+                if (error) throw error;
+                
+                const productSelect = document.getElementById('product');
+                const defaultOption = productSelect.querySelector('option[value=""]');
+                productSelect.innerHTML = '';
+                productSelect.appendChild(defaultOption);
+                
+                data.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.name;
+                    option.textContent = product.name;
+                    productSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading products:', error);
+            }
+        }
+        
+        // Load available time slots
+        async function loadTimeSlots() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('time_slots')
+                    .select('*')
+                    .eq('is_available', true)
+                    .gte('slot_date', new Date().toISOString().split('T')[0])
+                    .order('slot_date')
+                    .order('start_time');
+                
+                if (error) throw error;
+                
+                const slotSelect = document.getElementById('timeslot');
+                const defaultOption = slotSelect.querySelector('option[value=""]');
+                slotSelect.innerHTML = '';
+                slotSelect.appendChild(defaultOption);
+                
+                data.forEach(slot => {
+                    const date = new Date(slot.slot_date).toLocaleDateString();
+                    const option = document.createElement('option');
+                    option.value = slot.id;
+                    option.textContent = `${date} - ${slot.start_time} to ${slot.end_time}`;
+                    option.dataset.date = slot.slot_date;
+                    option.dataset.startTime = slot.start_time;
+                    option.dataset.endTime = slot.end_time;
+                    slotSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading time slots:', error);
+            }
+        }
         
         // Handle file selection and preview
         receiptInput.addEventListener('change', (e) => {
@@ -302,7 +365,7 @@
                     name: document.getElementById('name').value,
                     email: document.getElementById('email').value,
                     product: document.getElementById('product').value,
-                    date_time: document.getElementById('datetime').value || null,
+                    time_slot_id: document.getElementById('timeslot').value || null,
                     receipt_image: null
                 };
                 
