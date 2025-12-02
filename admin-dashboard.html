@@ -32,6 +32,25 @@
         .header h1 {
             font-size: 24px;
         }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .header-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .header-btn:hover {
+            background: white;
+            color: #667eea;
+        }
         .logout-btn {
             background: rgba(255,255,255,0.2);
             border: 2px solid white;
@@ -265,7 +284,10 @@
     <div class="header">
         <div class="header-content">
             <h1>Admin Dashboard</h1>
-            <button class="logout-btn" onclick="logout()">Logout</button>
+            <div class="header-buttons">
+                <a href="admin-settings.html" class="header-btn">⚙️ Settings</a>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
         </div>
     </div>
 
@@ -321,12 +343,15 @@
     </div>
 
     <script>
-        // ⚠️ REPLACE THESE WITH YOUR SUPABASE CREDENTIALS
+            // ⚠️ REPLACE THESE WITH YOUR SUPABASE CREDENTIALS
         const SUPABASE_URL = 'https://lkelfnsrauxwqpmvieck.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrZWxmbnNyYXV4d3FwbXZpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NDUxMTQsImV4cCI6MjA4MDIyMTExNH0.td0ULBGau-Bm3k11VTJtvDN516NYvukgLIOFVHzYvVo';
         
-        const { createClient } = supabase;
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Initialize Supabase client
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Verify client is initialized
+        console.log('Supabase client initialized:', supabaseClient ? 'Success' : 'Failed');
         
         let allSubmissions = [];
         
@@ -369,7 +394,14 @@
             try {
                 const { data, error } = await supabaseClient
                     .from('submissions')
-                    .select('*')
+                    .select(`
+                        *,
+                        time_slots (
+                            slot_date,
+                            start_time,
+                            end_time
+                        )
+                    `)
                     .order('created_at', { ascending: false });
                 
                 if (error) throw error;
@@ -433,7 +465,12 @@
             
             container.innerHTML = submissions.map(submission => {
                 const date = new Date(submission.created_at);
-                const dateTime = submission.date_time ? new Date(submission.date_time).toLocaleString() : 'Not provided';
+                
+                let timeSlotInfo = 'Not selected';
+                if (submission.time_slots) {
+                    const slotDate = new Date(submission.time_slots.slot_date).toLocaleDateString();
+                    timeSlotInfo = `${slotDate} - ${submission.time_slots.start_time} to ${submission.time_slots.end_time}`;
+                }
                 
                 return `
                     <div class="submission-card">
@@ -447,8 +484,8 @@
                                 <span>${submission.product}</span>
                             </div>
                             <div class="submission-field">
-                                <strong>Date & Time</strong>
-                                <span>${dateTime}</span>
+                                <strong>Time Slot</strong>
+                                <span>${timeSlotInfo}</span>
                             </div>
                             <div class="submission-field">
                                 <strong>Submitted</strong>
