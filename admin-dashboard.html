@@ -285,6 +285,82 @@
             cursor: pointer;
             font-size: 16px;
         }
+        .assign-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .assign-modal.active {
+            display: flex;
+        }
+        .assign-modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .assign-modal-content h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .driver-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .driver-item {
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .driver-item:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+        .driver-item.selected {
+            border-color: #667eea;
+            background: #e7f0ff;
+        }
+        .driver-name {
+            font-weight: 600;
+            color: #333;
+        }
+        .driver-email {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .driver-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .driver-available {
+            background: #d4edda;
+            color: #155724;
+        }
+        .driver-busy {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .assign-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
@@ -349,6 +425,17 @@
         <img id="modalImage" src="" alt="Receipt">
     </div>
 
+    <div id="assignModal" class="assign-modal">
+        <div class="assign-modal-content">
+            <h3>Assign Driver</h3>
+            <div id="driverList" class="driver-list"></div>
+            <div class="assign-actions">
+                <button class="btn" onclick="closeAssignModal()" style="background: #6c757d; color: white;">Cancel</button>
+                <button class="btn btn-assign" onclick="confirmAssignment()">Assign Driver</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ⚠️ REPLACE THESE WITH YOUR SUPABASE CREDENTIALS
         const SUPABASE_URL = 'https://lkelfnsrauxwqpmvieck.supabase.co';
@@ -407,6 +494,10 @@
                             slot_date,
                             start_time,
                             end_time
+                        ),
+                        drivers (
+                            name,
+                            email
                         )
                     `)
                     .order('created_at', { ascending: false });
@@ -421,6 +512,22 @@
             } catch (error) {
                 console.error('Error loading submissions:', error);
                 document.getElementById('loading').innerHTML = 'Error loading submissions. Please refresh the page.';
+            }
+        }
+
+        // Load available drivers
+        async function loadDrivers() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('drivers')
+                    .select('*')
+                    .order('name');
+                
+                if (error) throw error;
+                
+                allDrivers = data || [];
+            } catch (error) {
+                console.error('Error loading drivers:', error);
             }
         }
         
@@ -474,9 +581,16 @@
                 const date = new Date(submission.created_at);
                 
                 let timeSlotInfo = 'Not selected';
+                let hasTimeSlot = false;
                 if (submission.time_slots) {
+                    hasTimeSlot = true;
                     const slotDate = new Date(submission.time_slots.slot_date).toLocaleDateString();
                     timeSlotInfo = `${slotDate} - ${submission.time_slots.start_time} to ${submission.time_slots.end_time}`;
+                }
+
+                let driverInfo = 'Not assigned';
+                if (submission.drivers) {
+                    driverInfo = `${submission.drivers.name} (${submission.drivers.email})`;
                 }
                 
                 return `
@@ -495,6 +609,14 @@
                                 <span>${timeSlotInfo}</span>
                             </div>
                             <div class="submission-field">
+                                <strong>Driver</strong>
+                                <span>${driverInfo}</span>
+                            </div>
+                            <div class="submission-field">
+                                <strong>Work Status</strong>
+                                <span>${submission.work_status || 'pending'}</span>
+                            </div>
+                            <div class="submission-field">
                                 <strong>Submitted</strong>
                                 <span>${date.toLocaleString()}</span>
                             </div>
@@ -502,6 +624,12 @@
                                 <strong>Status</strong>
                                 <span class="status-badge status-${submission.status}">${submission.status}</span>
                             </div>
+                            ${submission.work_progress ? `
+                                <div class="submission-field" style="grid-column: 1 / -1;">
+                                    <strong>Progress Update</strong>
+                                    <span style="white-space: pre-wrap;">${submission.work_progress}</span>
+                                </div>
+                            ` : ''}
                             ${submission.receipt_image ? `
                                 <div class="receipt-thumbnail">
                                     <strong>Receipt</strong><br>
@@ -517,6 +645,12 @@
                                 <button class="btn btn-reject" onclick="updateStatus('${submission.id}', 'rejected')" ${submission.status === 'rejected' ? 'disabled' : ''}>
                                     ${submission.status === 'rejected' ? '✗ Rejected' : 'Reject'}
                                 </button>
+                                ${submission.status === 'approved' && !submission.driver_id && hasTimeSlot ? `
+                                    <button class="btn btn-assign" onclick="openAssignModal('${submission.id}')">Assign Driver</button>
+                                ` : ''}
+                                ${submission.status === 'approved' && !submission.driver_id && !hasTimeSlot ? `
+                                    <button class="btn btn-assign" onclick="openAssignModal('${submission.id}')" style="opacity: 0.5;" title="Optional: No time slot selected">Assign Driver (Optional)</button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -558,9 +692,70 @@
         function closeModal() {
             document.getElementById('imageModal').classList.remove('active');
         }
+
+        // Driver assignment functions
+        function openAssignModal(submissionId) {
+            currentSubmissionId = submissionId;
+            selectedDriverId = null;
+            
+            const driverList = document.getElementById('driverList');
+            driverList.innerHTML = allDrivers.map(driver => `
+                <div class="driver-item" onclick="selectDriver('${driver.id}')">
+                    <div class="driver-name">${driver.name}</div>
+                    <div class="driver-email">${driver.email}</div>
+                    <span class="driver-status ${driver.is_available ? 'driver-available' : 'driver-busy'}">
+                        ${driver.is_available ? 'Available' : 'Busy'}
+                    </span>
+                </div>
+            `).join('');
+            
+            document.getElementById('assignModal').classList.add('active');
+        }
+
+        function closeAssignModal() {
+            document.getElementById('assignModal').classList.remove('active');
+            currentSubmissionId = null;
+            selectedDriverId = null;
+        }
+
+        function selectDriver(driverId) {
+            selectedDriverId = driverId;
+            document.querySelectorAll('.driver-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+        }
+
+        async function confirmAssignment() {
+            if (!selectedDriverId) {
+                alert('Please select a driver');
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('submissions')
+                    .update({ 
+                        driver_id: selectedDriverId,
+                        assigned_at: new Date().toISOString(),
+                        work_status: 'assigned'
+                    })
+                    .eq('id', currentSubmissionId);
+                
+                if (error) throw error;
+                
+                closeAssignModal();
+                loadSubmissions();
+                alert('Driver assigned successfully!');
+            } catch (error) {
+                console.error('Error assigning driver:', error);
+                alert('Error assigning driver');
+            }
+        }
         
         // Initialize
         if (checkAuth()) {
+            loadDrivers();
             loadSubmissions();
             
             // Real-time updates (optional)
