@@ -325,7 +325,8 @@
         const SUPABASE_URL = 'https://lkelfnsrauxwqpmvieck.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrZWxmbnNyYXV4d3FwbXZpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NDUxMTQsImV4cCI6MjA4MDIyMTExNH0.td0ULBGau-Bm3k11VTJtvDN516NYvukgLIOFVHzYvVo';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         let allSubmissions = [];
         
@@ -366,7 +367,7 @@
         // Load submissions
         async function loadSubmissions() {
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('submissions')
                     .select('*')
                     .order('created_at', { ascending: false });
@@ -482,7 +483,7 @@
         // Update submission status
         async function updateStatus(id, status) {
             try {
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from('submissions')
                     .update({ status })
                     .eq('id', id);
@@ -519,7 +520,7 @@
             loadSubmissions();
             
             // Real-time updates (optional)
-            const subscription = supabase
+            const subscription = supabaseClient
                 .channel('submissions_changes')
                 .on('postgres_changes', { 
                     event: '*', 
